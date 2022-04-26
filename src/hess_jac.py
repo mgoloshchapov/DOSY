@@ -27,8 +27,7 @@ def jac(WD: np.array, x: np.array, y: np.array):
     for w, d, j in zip(W, D, range(n)):
         for xi, yi in zip(x, y):
             res[j] += 2 * ((wexp(xi, W, D) - yi) * np.exp(-d * xi)).sum()
-
-        res[j + n] = -res[j] * w * d
+            res[j + n] += -2 * ((wexp(xi, W, D) - yi) * np.exp(-d * xi) * xi * w).sum()
     return res
 
 
@@ -44,19 +43,21 @@ def hess(WD: np.array, x: np.array, y: np.array):
         for j in range(n):
             for k in range(m):
                 res[i][j] += 2 * np.exp(-(D[i] + D[j]) * x[k])
-            res[i + n][j + n] = W[i] * W[j] * D[i] * D[j] * res[i][j]
+                res[i + n][j + n] += 2 * W[i] * W[j] * (x[k]**2) * np.exp(-(D[i]+D[j])*x[k])
+                if i == j:
+                    res[i+n][j+n] += 2*W[i]*(x[k]**2)*(wexp(x[k], W, D) - y[k]) * np.exp(-D[i]*x[k])
 
     # левый нижний и правый верхний квадраты
     for i in range(n):
         for j in range(n):
             for k in range(m):
-                res[i][j + n] += -2 * W[j] * D[j] * np.exp(-(D[i] + D[j]) * x[k])
+                res[i][j + n] += -2 * W[j] * x[k] * np.exp(-(D[i] + D[j]) * x[k])
                 if i == j:
-                    res[i][j + n] += -2 * D[j] * (wexp(x[k], W, D) - y[k]) * np.exp(-D[j] * x[k])
+                    res[i][j + n] += -2 * x[k] * (wexp(x[k], W, D) - y[k]) * np.exp(-D[j] * x[k])
 
             res[j + n][i] = res[i][j + n]
     return res
 
 
-print(hess(np.array([1,2,3,4]), np.array([1,2,3,4,5]), np.array([1,2,3,4,5])))
-print(jac(np.array([1,2,3,4]), np.array([1,2,3,4,5]), np.array([1,2,3,4,5])))
+print(hess(np.array([1, 2, 3, 4]), np.array([1.5, 2]), np.array([2, 1.5])))
+print(jac(np.array([1, 2, 3, 4]), np.array([1.5, 2]), np.array([2, 1.5])))
