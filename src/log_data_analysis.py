@@ -1,5 +1,26 @@
 import numpy as np
-from scipy.optimize import Bounds
+
+
+def linear_least_squares(x: np.ndarray, y: np.ndarray):
+    """
+    This function evaluates linear regression using the least squares method
+    :param x: data
+    :param y: data
+    :return: coefficients and covariance matrix
+    """
+    # obtain coefficients
+    n = len(x)
+    if n < 3:
+        raise ValueError('number of points should be at least three')
+    X = np.hstack([np.ones(n)[:, None], x[:, None]])  # matrix for linear regression
+    coefficients = np.linalg.pinv(X) @ y  # solve linear regression
+    # obtain covariance
+    P = X @ np.linalg.pinv(X)  # projection matrix
+    M = np.eye(n) - P  # annihilator matrix
+    p = 2  # dimension of parameter vector, 2 for linear regression
+    sigma_squared = y.T @ M @ y / (n - p)  # estimate of the regression standard error
+    # covariance = sigma_squared * np.linalg.inv(X.T @ X)  # covariance matrix
+    return coefficients, sigma_squared
 
 
 def log_estimate(x, y, w_min=0.01):
@@ -11,39 +32,38 @@ def log_estimate(x, y, w_min=0.01):
     :return:
     """
     cut = round(x.size / 4)
+    cut2 = round(x.size / 6)
 
-    D_1, w_1 = np.polyfit(x[-cut:], np.log(y)[-cut:], deg=1)
-    D_1, w_1 = -D_1, np.exp(w_1)
+    coeffs, s = linear_least_squares(x[-cut:], np.log(y)[-cut:])
+    D_1, w1 = -coeffs[1], np.exp(coeffs[0])
+    if w1 >= 1:
+        w1 = 0.9
 
-    D_n, b = np.polyfit(x[:cut], y[:cut], deg=1)
-    D_n = -D_n
+    coeffs, s2 = linear_least_squares(x[:cut2], y[:cut2])
+    D_n = -coeffs[1]
+    return max(w1, w_min), max(D_1, 1e-4), min(D_n / w_min, 10), min(np.sqrt(s2), np.sqrt(s))
 
-    return D_1, min(D_n / w_min, 1e-5), w_1
 
-
-def bounds(D1, w1, n, D_max, w_min):
-    D_min = D1*0.9
+def bounds(D1, w1, D_max, n, w_min=0.01):
+    D_min = D1 * 0.5
     w_max = 1 - w1
     # initial guess
-    Ds = np.linspace(D1, D_max * 0.9, n)
-    ws = np.zeros(n)
+    Ds = np.linspace(D1, D_max * 0.9, n // 2)
+    ws = np.zeros(n // 2)
     ws[0] = w1
-    ws[1:] = np.linspace(-w_max * 0.9, -w_min * 1.1, n - 1)
-    ws[1:] = -ws[1:]
-    x0 = np.zeros((n, 2))
-    x0[:, 0] = ws
-    x0[:, 1] = Ds
-    x0 = x0.flatten()
+    if w_max * 0.8 <= w_min * 1.1:
+        ws[1:] = w_min * 1.1
+    else:
+        ws[1:] = np.linspace(w_min * 1.1, w_max * 0.9, n // 2 - 1)
+    x0 = np.zeros(n)
+    x0[::2] = ws
+    x0[1::2] = Ds
     # lower bound
-    xl = np.zeros((n, 2))
-    xl[:, 0] = w_min
-    xl[:, 1] = D_min
-    xl = xl.flatten()
+    xl = np.zeros(n)
+    xl[::2] = w_min
+    xl[1::2] = D_min
     # upper bound
-    xw = np.zeros((n, 2))
-    xw[:, 0] = 1
-    xw[:, 1] = D_max
-    xw = xw.flatten()
-    bnds = Bounds(tuple(xl), tuple(xw))
-    return x0, bnds
-
+    xw = np.zeros(n)
+    xw[::2] = 1
+    xw[1::2] = D_max
+    return x0, xl, xw

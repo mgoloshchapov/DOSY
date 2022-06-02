@@ -58,6 +58,3 @@ def hess(WD: np.array, x: np.array, y: np.array):
             res[j + n][i] = res[i][j + n]
     return res
 
-
-print(hess(np.array([1, 2, 3, 4]), np.array([1.5, 2]), np.array([2, 1.5])))
-print(jac(np.array([1, 2, 3, 4]), np.array([1.5, 2]), np.array([2, 1.5])))
