@@ -53,32 +53,36 @@ def loss_function(params, x, y, reg=0, func=sum_exp):
     return least_sqruares(y, y_pred) + reg * np.linalg.norm(params)
 
 
-def fits(x, y, n_min=1, n_max=5, method='curve_fit', reg=0.01):
-
+def fit(x, y, n, method='BFGS', reg=0.0):
     w1, D1, D_max, s = log_estimate(x, y)
+    x0, xl, xw = bounds(D1, w1, D_max, 2 * n)
+    if method == 'curve_fit':
+        params, pcov = optimize.curve_fit(sum_exp_curv, x, y, p0=x0, bounds=(xl, xw),
+                                          maxfev=100000)
+        params = right_order(params)
+    elif method == 'dual_annealing':
+        res = optimize.dual_annealing(loss_function, bounds=list(zip(xl, xw)), x0=x0,
+                                      args=(x, y, reg),
+                                      seed=42, initial_temp=1, maxiter=1000, visit=2, accept=-1,
+                                      no_local_search=False,
+                                      minimizer_kwargs={'method': 'BFGS'})
+        params = right_order(res.x)
+    elif method == 'BFGS':
+        res = optimize.minimize(loss_function, x0=x0,
+                                args=(x, y, reg), method='BFGS')
+        params = right_order(res.x)
+    elif method == 'L-BFGS-B':
+        res = optimize.minimize(loss_function, x0=x0, bounds=list(zip(xl, xw)),
+                                args=(x, y, reg), method='L-BFGS-B')
+        params = right_order(res.x)
+    else:
+        raise ValueError('method should be curve_fit, dual_annealing, L-BFGS-B, or BFGS')
+    return params
+
+
+def fits(x, y, n_min=1, n_max=5, method='curve_fit', reg=0.0):
     params_est = []
-
     for n in range(n_min, n_max + 1):
-
-        x0, xl, xw = bounds(D1, w1, D_max, 2 * n)
-
-        if method == 'curve_fit':
-            params, pcov = optimize.curve_fit(sum_exp_curv, x, y, p0=x0, bounds=(xl, xw),
-                                              maxfev=100000)
-
-
-        elif method == 'dual_annealing':
-            res = optimize.dual_annealing(loss_function, bounds=list(zip(xl, xw)), x0=x0,
-                                          args=(x, y, reg),
-                                          seed=42, initial_temp=1, maxiter=1000, visit=2, accept=-1,
-                                          no_local_search=False,
-                                          minimizer_kwargs={'method': 'BFGS'})
-            params = res.x
-
-
-        else:
-            raise ValueError('method should be curve_fit or dual_annealing')
-
+        params = fit(x, y, n, method, reg)
         params_est.append(right_order(params))
-
-    return params_est, s
+    return params_est
