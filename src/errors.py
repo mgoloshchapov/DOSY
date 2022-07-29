@@ -45,3 +45,16 @@ def plot_parameters_space(thetas, bins=30, cut=0.0):
             plt.setp(ax[i, 0], ylabel=f'w{i + 1 - i // 2}')
         else:
             plt.setp(ax[i, 0], ylabel=f'D{i - i // 2}')
+
+
+def plot_errors(x, y, theta, res):
+    plt.subplot(121)
+    plt.plot(x, y, '.', label='data')
+    plt.plot(x, sum_exp_curv(x, *theta), label='fit')
+    plt.ylabel('$I/I_0$')
+    plt.xlabel('Z * 1e-6')
+    plt.legend()
+    plt.subplot(122)
+    plt.plot(x, res, '.')
+    plt.xlabel('Z * 1e-6')
+    plt.ylabel('residuals')

@@ -1,8 +1,9 @@
 import matplotlib.pyplot as plt
+import numpy as np
 
-from src.data_loading import load_data
-from src.mixture_fit import fits, sum_exp
-from src.optimal_number import AIC_analysis, BIC_analysis
+from src.errors import bootstrap_resudial
+from src.mixture_fit import fits
+from src.optimal_number import optimal_params
 
 
 def plot(x, y, title=None, fontsize=15):
@@ -22,123 +23,46 @@ def param_print(array):
         print()
 
 
-def metrics_plot(x, y, params, s, method):
-    if method == "curve_fit":
-        plt.figure(figsize=(10, 5))
-        m_aic, aics, aic_probs = AIC_analysis(x, y, params, s)
+def metrics_plot(aics, aic_probs, bics, bic_probs):
+    plt.subplot(121)
+    plt.plot(range(1, len(aics) + 1), aic_probs, '.')
+    plt.hlines(0.32, 1, len(aics) + 1, 'r', alpha=0.5)
+    plt.hlines(0.05, 1, len(aics) + 1, 'r', alpha=0.5)
+    plt.ylabel('exp($\Delta$AIC/2)')
+    plt.xlabel('number of exponents')
+    plt.title("AIC")
 
-        plt.subplot(121)
-        plt.plot(range(1, len(aics) + 1), aic_probs, '.')
-        plt.hlines(0.32, 1, len(aics) + 1, 'r', alpha=0.5)
-        plt.hlines(0.05, 1, len(aics) + 1, 'r', alpha=0.5)
-        plt.ylabel('exp($\Delta$AIC/2)')
-        plt.xlabel('number of exponents')
-        plt.title("Curve fit AIC")
-
-        m_bic, bics, bic_probs = BIC_analysis(x, y, params, s)
-
-        plt.subplot(122)
-        plt.plot(range(1, len(bics) + 1), bic_probs, '.')
-        plt.hlines(0.32, 1, len(bics) + 1, 'r', alpha=0.5)
-        plt.hlines(0.05, 1, len(bics) + 1, 'r', alpha=0.5)
-        plt.ylabel('exp($\Delta$BIC/2)')
-        plt.xlabel('number of exponents')
-        plt.title("Curve fit BIC")
-
-        plt.show()
-
-    elif method == "dual_annealing":
-        plt.figure(figsize=(10, 5))
-        m_aic, aics, aic_probs = AIC_analysis(x, y, params, s)
-
-        plt.subplot(121)
-        plt.plot(range(1, len(aics) + 1), aic_probs, '.')
-        plt.hlines(0.32, 1, len(aics) + 1, 'r', alpha=0.5)
-        plt.hlines(0.05, 1, len(aics) + 1, 'r', alpha=0.5)
-        plt.ylabel('exp($\Delta$AIC/2)')
-        plt.xlabel('number of exponents')
-        plt.title("Dual annealing AIC")
-
-        m_bic, bics, bic_probs = BIC_analysis(x, y, params, s)
-
-        plt.subplot(122)
-        plt.plot(range(1, len(bics) + 1), bic_probs, '.')
-        plt.hlines(0.32, 1, len(bics) + 1, 'r', alpha=0.5)
-        plt.hlines(0.05, 1, len(bics) + 1, 'r', alpha=0.5)
-        plt.ylabel('exp($\Delta$BIC/2)')
-        plt.xlabel('number of exponents')
-        plt.title("Dual annealing BIC")
-
-        plt.tight_layout()
-        plt.show()
-
-    else:
-        raise "InvalidMethod. [curve_fit, dual_anneling] are available"
-
-    return m_aic, m_bic
+    plt.subplot(122)
+    plt.plot(range(1, len(bics) + 1), bic_probs, '.')
+    plt.hlines(0.32, 1, len(bics) + 1, 'r', alpha=0.5)
+    plt.hlines(0.05, 1, len(bics) + 1, 'r', alpha=0.5)
+    plt.ylabel('exp($\Delta$BIC/2)')
+    plt.xlabel('number of exponents')
+    plt.title("BIC")
+    plt.show()
 
 
-def graphics_plot(x, y, params, m_aic, m_bic, method):
-    if method == "curve_fit":
-        plt.figure(figsize=(12, 6))
-        plt.subplot(121)
-        plt.plot(x, sum_exp(params[m_aic], x))
-        plot(x, y, "{} exponents, curve fit, AIC".format(m_aic + 1))
+def number_analysis(x, y, n_min=1, n_max=3, method="BFGS", reg=0.005):
+    params = fits(x, y, n_min, n_max, method, reg)
+    aics, aic_probs, bics, bic_probs, m_aic, m_bic, cons_number = optimal_params(x, y, params)
+    metrics_plot(aics, aic_probs, bics, bic_probs)
 
-        plt.subplot(122)
-        plt.plot(x, sum_exp(params[m_bic], x))
-        plot(x, y, "{} exponents, curve fit, BIC".format(m_bic + 1))
-        plt.tight_layout()
-        plt.show()
+    print(f"{method}")
+    print("---------------------------")
+    param_print(params)
+    print("---------------------------")
+    print(f"AIC: {m_aic + 1}")
+    print(f"BIC: {m_bic + 1}")
+    print(f"conservative: {cons_number + 1}")
 
-    elif method == "dual_annealing":
-        plt.figure(figsize=(12, 6))
-
-        plt.subplot(121)
-        plt.plot(x, sum_exp(params[m_aic], x))
-        plot(x, y, "{} exponents, dual annealing, AIC".format(m_aic + 1))
-
-        plt.subplot(122)
-        plt.plot(x, sum_exp(params[m_bic], x))
-        plot(x, y, "{} exponents, dual annealing, BIC".format(m_bic + 1))
-        plt.tight_layout()
-        plt.show()
-
-    else:
-        raise "InvalidMethod. [curve_fit, dual_anneling] are available"
+    return params, m_aic + 1, m_bic + 1, cons_number + 1
 
 
-def dosy_analysis(path, n_min=1, n_max=3, method="curve_fit"):
-    x, y = load_data(path, scale=1e6)
-
-    params_cf, params_da = None, None
-    if method == "curve_fit" or method == "both":
-        params_cf, s_cf = fits(x, y, n_min=n_min, n_max=n_max, method="curve_fit")
-
-        m_cf_aic, m_cf_bic = metrics_plot(x, y, params_cf, s_cf, method="curve_fit")
-
-        graphics_plot(x, y, params_cf, m_cf_aic, m_cf_bic, method="curve_fit")
-
-        print()
-
-        print("Curve fit")
-        print("---------------------------")
-        param_print(params_cf)
-
-    if method == "dual_annealing" or method == "both":
-        params_da, s_da = fits(x, y, n_min=n_min, n_max=n_max, method="dual_annealing")
-
-        m_da_aic, m_da_bic = metrics_plot(x, y, params_da, s_da, method="dual_annealing")
-
-        graphics_plot(x, y, params_da, m_da_aic, m_da_bic, method="dual_annealing")
-
-        print()
-
-        print("Dual annealing")
-        print("---------------------------")
-        param_print(params_da)
-
-    if method not in ["curve_fit", "dual_annealing", "both"]:
-        raise "InvalidMethod. [curve_fit, dual_anneling, both] are available"
-
-    return [x, y, params_cf, params_da]
+def error_analysis(n, x, y, method='BFGS', reg=0.0,
+                   bs_iters=1000, bs_method='residuals', seed=42):
+    init_theta, thetas, res = bootstrap_resudial(n, x, y, bs_iters, bs_method,
+                                                 method, seed, reg)
+    print(f'estimate: {init_theta}')
+    print(f'mean of samples: {np.mean(thetas, axis=0)}')
+    print(f'std of samples: {np.std(thetas, axis=0)}')
+    return init_theta, thetas, res
